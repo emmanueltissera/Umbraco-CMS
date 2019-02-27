@@ -1,22 +1,20 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Formatting;
 using System.Web.Http;
+using System.Web.Http.ModelBinding;
 using System.Web.Security;
 using Umbraco.Core;
 using Umbraco.Core.Models;
-using Umbraco.Core.Models.EntityBase;
-using Umbraco.Core.Persistence.Querying;
+using Umbraco.Core.Services;
 using Umbraco.Core.Security;
+using Umbraco.Web.Actions;
 using Umbraco.Web.Models.Trees;
 using Umbraco.Web.Mvc;
 using Umbraco.Web.WebApi.Filters;
-using umbraco;
-using umbraco.BusinessLogic.Actions;
 using Umbraco.Web.Models.ContentEditing;
 using Umbraco.Web.Search;
 using Constants = Umbraco.Core.Constants;
@@ -29,20 +27,20 @@ namespace Umbraco.Web.Trees
         Constants.Applications.Content,
         Constants.Applications.Media,
         Constants.Applications.Members)]
-    [LegacyBaseTree(typeof (loadMembers))]
-    [Tree(Constants.Applications.Members, Constants.Trees.Members, null, sortOrder: 0)]
+    [Tree(Constants.Applications.Members, Constants.Trees.Members, SortOrder = 0)]
     [PluginController("UmbracoTrees")]
     [CoreTree]
     [SearchableTree("searchResultFormatter", "configureMemberResult")]
     public class MemberTreeController : TreeController, ISearchableTree
     {
-        public MemberTreeController()
+        public MemberTreeController(UmbracoTreeSearcher treeSearcher)
         {
+            _treeSearcher = treeSearcher;
             _provider = Core.Security.MembershipProviderExtensions.GetMembersMembershipProvider();
             _isUmbracoProvider = _provider.IsUmbracoMembershipProvider();
         }
 
-        private readonly UmbracoTreeSearcher _treeSearcher = new UmbracoTreeSearcher();
+        private readonly UmbracoTreeSearcher _treeSearcher;
         private readonly MembershipProvider _provider;
         private readonly bool _isUmbracoProvider;
 
@@ -52,9 +50,8 @@ namespace Umbraco.Web.Trees
         /// <param name="id"></param>
         /// <param name="queryStrings"></param>
         /// <returns></returns>
-        [HttpQueryStringFilter("queryStrings")]
-        public TreeNode GetTreeNode(string id, FormDataCollection queryStrings)
-        {   
+        public TreeNode GetTreeNode(string id, [ModelBinder(typeof(HttpQueryStringModelBinder))]FormDataCollection queryStrings)
+        {
             var node = GetSingleTreeNode(id, queryStrings);
 
             //add the tree alias to the node since it is standalone (has no root for which this normally belongs)
@@ -86,7 +83,7 @@ namespace Umbraco.Web.Trees
                     "icon-user",
                     false,
                     "",
-                    Udi.Create(UmbracoObjectTypesExtensions.GetUdiType(Constants.ObjectTypes.MemberGuid), member.Key));
+                    Udi.Create(ObjectTypes.GetUdiType(Constants.ObjectTypes.Member), member.Key));
 
                 node.AdditionalData.Add("contentType", member.ContentTypeAlias);
                 node.AdditionalData.Add("isContainer", true);
@@ -116,10 +113,8 @@ namespace Umbraco.Web.Trees
                     "icon-user",
                     false);
 
-                return node;    
+                return node;
             }
-
-            
         }
 
         protected override TreeNodeCollection GetTreeNodes(string id, FormDataCollection queryStrings)
@@ -129,15 +124,15 @@ namespace Umbraco.Web.Trees
             if (id == Constants.System.Root.ToInvariantString())
             {
                 nodes.Add(
-                        CreateTreeNode(Constants.Conventions.MemberTypes.AllMembersListId, id, queryStrings, ui.Text("member", "allMembers"), "icon-users", false,
-                            queryStrings.GetValue<string>("application") + TreeAlias.EnsureStartsWith('/') + "/list/" + Constants.Conventions.MemberTypes.AllMembersListId));
+                        CreateTreeNode(Constants.Conventions.MemberTypes.AllMembersListId, id, queryStrings, Services.TextService.Localize("member/allMembers"), "icon-users", true,
+                            queryStrings.GetRequiredValue<string>("application") + TreeAlias.EnsureStartsWith('/') + "/list/" + Constants.Conventions.MemberTypes.AllMembersListId));
 
                 if (_isUmbracoProvider)
                 {
                     nodes.AddRange(Services.MemberTypeService.GetAll()
                         .Select(memberType =>
-                            CreateTreeNode(memberType.Alias, id, queryStrings, memberType.Name, "icon-users", false,
-                                queryStrings.GetValue<string>("application") + TreeAlias.EnsureStartsWith('/') + "/list/" + memberType.Alias)));
+                            CreateTreeNode(memberType.Alias, id, queryStrings, memberType.Name, "icon-users", true,
+                                queryStrings.GetRequiredValue<string>("application") + TreeAlias.EnsureStartsWith('/') + "/list/" + memberType.Alias)));
                 }
             }
 
@@ -155,38 +150,47 @@ namespace Umbraco.Web.Trees
 
             if (id == Constants.System.Root.ToInvariantString())
             {
-                // root actions      
+                // root actions
                 if (_provider.IsUmbracoMembershipProvider())
                 {
                     //set default
-                    menu.DefaultMenuAlias = ActionNew.Instance.Alias;
+                    menu.DefaultMenuAlias = ActionNew.ActionAlias;
 
                     //Create the normal create action
-                    menu.Items.Add<ActionNew>(ui.Text("actions", ActionNew.Instance.Alias));
+                    menu.Items.Add<ActionNew>(Services.TextService, opensDialog: true);
                 }
                 else
                 {
                     //Create a custom create action - this does not launch a dialog, it just navigates to the create screen
                     // we'll create it based on the ActionNew so it maintains the same icon properties, name, etc...
-                    var createMenuItem = new MenuItem(ActionNew.Instance);
+                    var createMenuItem = new MenuItem(ActionNew.ActionAlias, Services.TextService)
+                    {
+                        Icon = "add",
+                        OpensDialog = true
+                    };
                     //we want to go to this route: /member/member/edit/-1?create=true
                     createMenuItem.NavigateToRoute("/member/member/edit/-1?create=true");
                     menu.Items.Add(createMenuItem);
                 }
-                
-                menu.Items.Add<RefreshNode, ActionRefresh>(ui.Text("actions", ActionRefresh.Instance.Alias), true);
+
+                menu.Items.Add(new RefreshNode(Services.TextService, true));
                 return menu;
             }
 
             //add delete option for all members
-            menu.Items.Add<ActionDelete>(ui.Text("actions", ActionDelete.Instance.Alias));
+            menu.Items.Add<ActionDelete>(Services.TextService, opensDialog: true);
+
+            if (Security.CurrentUser.HasAccessToSensitiveData())
+            {
+                menu.Items.Add(new ExportMember(Services.TextService));
+            }
 
             return menu;
         }
 
-        public IEnumerable<SearchResultItem> Search(string query, int pageSize, long pageIndex, out long totalFound, string searchFrom = null)
+        public IEnumerable<SearchResultEntity> Search(string query, int pageSize, long pageIndex, out long totalFound, string searchFrom = null)
         {
-            return _treeSearcher.ExamineSearch(Umbraco, query, UmbracoEntityTypes.Member, pageSize, pageIndex, out totalFound, searchFrom);
+            return _treeSearcher.ExamineSearch(query, UmbracoEntityTypes.Member, pageSize, pageIndex, out totalFound, searchFrom);
         }
     }
 }

@@ -26,6 +26,10 @@ namespace Umbraco.Web.Models.ContentEditing
         [DataMember(Name = "isContainer")]
         public bool IsContainer { get; set; }
 
+        //Element
+        [DataMember(Name = "isElement")]
+        public bool IsElement { get; set; }
+
         [DataMember(Name = "listViewEditorName")]
         [ReadOnly(true)]
         public string ListViewEditorName { get; set; }
@@ -59,7 +63,7 @@ namespace Umbraco.Web.Models.ContentEditing
         /// A content item can be invalid but still be saved. This occurs when there's property validation errors, we will
         /// still save the item but it cannot be published. So we need a way of returning validation errors as well as the
         /// updated model.
-        /// 
+        ///
         /// NOTE: The ProperCase is important because when we return ModeState normally it will always be proper case.
         /// </remarks>
         [DataMember(Name = "ModelState")]
@@ -80,6 +84,6 @@ namespace Umbraco.Web.Models.ContentEditing
         //Tabs
         [DataMember(Name = "groups")]
         public IEnumerable<PropertyGroupDisplay<TPropertyTypeDisplay>> Groups { get; set; }
-        
+
     }
 }

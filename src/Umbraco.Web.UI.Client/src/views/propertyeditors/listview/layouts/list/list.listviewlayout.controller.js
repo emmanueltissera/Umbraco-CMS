@@ -30,15 +30,14 @@
         vm.dragLeave = dragLeave;
         vm.onFilesQueue = onFilesQueue;
         vm.onUploadComplete = onUploadComplete;
+        markAsSensitive();
 
         function activate() {
-
             if ($scope.entityType === 'media') {
                 mediaTypeHelper.getAllowedImagetypes(vm.nodeId).then(function (types) {
                     vm.acceptedMediatypes = types;
                 });
             }
-
         }
 
         function selectAll($event) {
@@ -56,7 +55,7 @@
         function clickItem(item) {
             // if item.id is 2147483647 (int.MaxValue) use item.key
             $location.path($scope.entityType + '/' + $scope.entityType + '/edit/' + (item.id === 2147483647 ? item.key : item.id));
-        }
+                }
 
         function isSortDirection(col, direction) {
             return listViewHelper.setSortingDirection(col, direction, $scope.options);
@@ -85,6 +84,27 @@
 
         function onUploadComplete() {
             $scope.getContent($scope.contentId);
+        }
+
+        function markAsSensitive() {
+            angular.forEach($scope.options.includeProperties, function (option) {
+                option.isSensitive = false;
+
+                angular.forEach($scope.items,
+                    function (item) {
+
+                        angular.forEach(item.properties,
+                            function (property) {
+
+                                if (option.alias === property.alias) {
+                                    option.isSensitive = property.isSensitive;
+                                }
+
+                            });
+
+                    });
+
+            });
         }
 
         activate();

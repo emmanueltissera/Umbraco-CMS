@@ -1,4 +1,4 @@
-using System.Net.Http;
+﻿using System.Net.Http;
 using System.Security.Claims;
 using System.Security.Principal;
 using System.ServiceModel.Channels;
@@ -22,8 +22,8 @@ namespace Umbraco.Web.Security
         internal static IPrincipal SetPrincipalForRequest(this HttpRequestMessage request, IPrincipal principal)
         {
             //It is actually not good enough to set this on the current app Context and the thread, it also needs
-            // to be set explicitly on the HttpContext.Current !! This is a strange web api thing that is actually 
-            // an underlying fault of asp.net not propogating the User correctly.
+            // to be set explicitly on the HttpContext.Current !! This is a strange web api thing that is actually
+            // an underlying fault of asp.net not propagating the User correctly.
             if (HttpContext.Current != null)
             {
                 HttpContext.Current.User = principal;
@@ -50,8 +50,8 @@ namespace Umbraco.Web.Security
         internal static IPrincipal SetPrincipalForRequest(this HttpContextBase httpContext, IPrincipal principal)
         {            
             //It is actually not good enough to set this on the current app Context and the thread, it also needs
-            // to be set explicitly on the HttpContext.Current !! This is a strange web api thing that is actually 
-            // an underlying fault of asp.net not propogating the User correctly.
+            // to be set explicitly on the HttpContext.Current !! This is a strange web api thing that is actually
+            // an underlying fault of asp.net not propagating the User correctly.
             if (HttpContext.Current != null)
             {
                 HttpContext.Current.User = principal;

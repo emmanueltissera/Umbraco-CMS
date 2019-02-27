@@ -128,7 +128,7 @@ namespace Umbraco.Core.Strings
                 // The Unicode standard assigns the following code points to control characters: from \U0000 to \U001F,
                 // \U007F, and from \U0080 to \U009F. According to the Unicode standard, these values are to be
                 // interpreted as control characters unless their use is otherwise defined by an application. Valid
-                // control characters are members of the UnicodeCategory.Control category. 
+                // control characters are members of the UnicodeCategory.Control category.
 
                 // we don't want them
             }
@@ -137,10 +137,10 @@ namespace Umbraco.Core.Strings
             //    // The Unicode standard recognizes three subcategories of separators:
             //    // - Space separators (the UnicodeCategory.SpaceSeparator category), which includes characters such as \u0020.
             //    // - Line separators (the UnicodeCategory.LineSeparator category), which includes \u2028.
-            //    // - Paragraph separators (the UnicodeCategory.ParagraphSeparator category), which includes \u2029. 
+            //    // - Paragraph separators (the UnicodeCategory.ParagraphSeparator category), which includes \u2029.
             //    //
             //    // Note: The Unicode standard classifies the characters \u000A (LF), \u000C (FF), and \u000A (CR) as control
-            //    // characters (members of the UnicodeCategory.Control category), not as separator characters. 
+            //    // characters (members of the UnicodeCategory.Control category), not as separator characters.
 
             //    // better do it via WhiteSpace
             //}
@@ -3322,7 +3322,7 @@ namespace Umbraco.Core.Strings
 
                     // BEGIN CUSTOM TRANSLITERATION OF CYRILIC CHARS
 
-                    #region Cyrilic chars
+                    #region Cyrillic chars
 
                     // russian uppercase "А Б В Г Д Е Ё Ж З И Й К Л М Н О П Р С Т У Ф Х Ц Ч Ш Щ Ъ Ы Ь Э Ю Я"
                     // russian lowercase "а б в г д е ё ж з и й к л м н о п р с т у ф х ц ч ш щ ъ ы ь э ю я"
@@ -3337,10 +3337,9 @@ namespace Umbraco.Core.Strings
                     // time for a T4 template?
                     // also we should support extensibility so ppl can register more cases in external code
 
-                    // fixme
-                    // transliterates Анастасия as Anastasiya, and not Anastasia
+                    // TODO: transliterates Анастасия as Anastasiya, and not Anastasia
                     // Ольга --> Ol'ga, Татьяна --> Tat'yana -- that's bad (?)
-                    // Note: should ä (german umlaut) become a or ae ?
+                    // Note: should ä (German umlaut) become a or ae ?
 
                     case '\u0410': // А
                         output[opos++] = 'A';
@@ -3452,7 +3451,7 @@ namespace Umbraco.Core.Strings
                     case '\u0440': // р
                         output[opos++] = 'r';
                         break;
-                    case '\u0421': // С 
+                    case '\u0421': // С
                         output[opos++] = 'S';
                         break;
                     case '\u0441': // с

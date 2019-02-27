@@ -3,22 +3,26 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Umbraco.Core;
+using Umbraco.Core.Logging;
 using Umbraco.Core.Models;
 using Umbraco.Core.PropertyEditors;
+using Umbraco.Core.Services;
 using Umbraco.Web.Models.ContentEditing;
 
 namespace Umbraco.Web.Models.Mapping
 {
-    internal class PropertyTypeGroupResolver<TPropertyType> : ValueResolver<IContentTypeComposition, IEnumerable<PropertyGroupDisplay<TPropertyType>>> 
+    internal class PropertyTypeGroupResolver<TPropertyType>
         where TPropertyType : PropertyTypeDisplay, new()
     {
-        private readonly ApplicationContext _applicationContext;
-        private readonly Lazy<PropertyEditorResolver> _propertyEditorResolver;
+        private readonly PropertyEditorCollection _propertyEditors;
+        private readonly IDataTypeService _dataTypeService;
+        private readonly ILogger _logger;
 
-        public PropertyTypeGroupResolver(ApplicationContext applicationContext, Lazy<PropertyEditorResolver> propertyEditorResolver)
+        public PropertyTypeGroupResolver(PropertyEditorCollection propertyEditors, IDataTypeService dataTypeService, ILogger logger)
         {
-            _applicationContext = applicationContext;
-            _propertyEditorResolver = propertyEditorResolver;
+            _propertyEditors = propertyEditors;
+            _dataTypeService = dataTypeService;
+            _logger = logger;
         }
 
         /// <summary>
@@ -61,7 +65,7 @@ namespace Umbraco.Web.Models.Mapping
                 .FirstOrDefault(x => x != null);
         }
 
-        protected override IEnumerable<PropertyGroupDisplay<TPropertyType>> ResolveCore(IContentTypeComposition source)
+        public IEnumerable<PropertyGroupDisplay<TPropertyType>> Resolve(IContentTypeComposition source)
         {
             // deal with groups
             var groups = new List<PropertyGroupDisplay<TPropertyType>>();
@@ -80,7 +84,7 @@ namespace Umbraco.Web.Models.Mapping
 
                 group.Properties = MapProperties(tab.PropertyTypes, source, tab.Id, false);
                 groups.Add(group);
-            }         
+            }
 
             // add groups inherited through composition
             var localGroupIds = groups.Select(x => x.Id).ToArray();
@@ -91,7 +95,7 @@ namespace Umbraco.Web.Models.Mapping
 
                 // get the content type that defines this group
                 var definingContentType = GetContentTypeForPropertyGroup(source, tab.Id);
-                if (definingContentType == null) 
+                if (definingContentType == null)
                     throw new Exception("PropertyGroup with id=" + tab.Id + " was not found on any of the content type's compositions.");
 
                 var group = new PropertyGroupDisplay<TPropertyType>
@@ -134,11 +138,11 @@ namespace Umbraco.Web.Models.Mapping
             {
                 var genericTab = new PropertyGroupDisplay<TPropertyType>
                 {
-                    Id = PropertyGroupBasic.GenericPropertiesGroupId, 
+                    Id = PropertyGroupBasic.GenericPropertiesGroupId,
                     Name = "Generic properties",
-                    ContentTypeId = source.Id, 
+                    ContentTypeId = source.Id,
                     SortOrder = 999,
-                    Inherited = false, 
+                    Inherited = false,
                     Properties = genericProperties
                 };
                 groups.Add(genericTab);
@@ -195,13 +199,24 @@ namespace Umbraco.Web.Models.Mapping
         {
             var mappedProperties = new List<TPropertyType>();
 
-            foreach (var p in properties.Where(x => x.DataTypeDefinitionId != 0).OrderBy(x => x.SortOrder))
+            foreach (var p in properties.Where(x => x.DataTypeId != 0).OrderBy(x => x.SortOrder))
             {
-                var propertyEditor = _propertyEditorResolver.Value.GetByAlias(p.PropertyEditorAlias);
-                var preValues = _applicationContext.Services.DataTypeService.GetPreValuesCollectionByDataTypeId(p.DataTypeDefinitionId);
+                var propertyEditorAlias = p.PropertyEditorAlias;
+                var propertyEditor = _propertyEditors[propertyEditorAlias];
+                var dataType = _dataTypeService.GetDataType(p.DataTypeId);
 
-                if (propertyEditor == null) 
-                    throw new InvalidOperationException("No property editor could be resolved with the alias: " + p.PropertyEditorAlias + ", ensure all packages are installed correctly.");
+                //fixme: Don't explode if we can't find this, log an error and change this to a label
+                if (propertyEditor == null)
+                {
+                    _logger.Error(GetType(),
+                        "No property editor could be resolved with the alias: {PropertyEditorAlias}, defaulting to label", p.PropertyEditorAlias);
+                    propertyEditorAlias = Constants.PropertyEditors.Aliases.Label;
+                    propertyEditor = _propertyEditors[propertyEditorAlias];
+                }
+
+                var config = propertyEditor == null
+                    ? new Dictionary<string, object>()
+                    : dataType.Editor.GetConfigurationEditor().ToConfigurationEditor(dataType.Configuration);
 
                 mappedProperties.Add(new TPropertyType
                 {
@@ -211,15 +226,16 @@ namespace Umbraco.Web.Models.Mapping
                     Editor = p.PropertyEditorAlias,
                     Validation = new PropertyTypeValidation {Mandatory = p.Mandatory, Pattern = p.ValidationRegExp},
                     Label = p.Name,
-                    View = propertyEditor.ValueEditor.View,
-                    Config = propertyEditor.PreValueEditor.ConvertDbToEditor(propertyEditor.DefaultPreValues, preValues),
+                    View = propertyEditor.GetValueEditor().View,
+                    Config = config,
                     //Value = "",
                     GroupId = groupId,
                     Inherited = inherited,
-                    DataTypeId = p.DataTypeDefinitionId,
+                    DataTypeId = p.DataTypeId,
                     SortOrder = p.SortOrder,
                     ContentTypeId = contentType.Id,
-                    ContentTypeName = contentType.Name
+                    ContentTypeName = contentType.Name,
+                    AllowCultureVariant = p.VariesByCulture()
                 });
             }
 

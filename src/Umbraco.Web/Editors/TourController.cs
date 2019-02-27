@@ -3,30 +3,38 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Newtonsoft.Json;
+using Umbraco.Core;
+using Umbraco.Core.Composing;
 using Umbraco.Core.Configuration;
 using Umbraco.Core.IO;
 using Umbraco.Web.Models;
 using Umbraco.Web.Mvc;
+using Umbraco.Web.Tour;
 
 namespace Umbraco.Web.Editors
 {
     [PluginController("UmbracoApi")]
     public class TourController : UmbracoAuthorizedJsonController
     {
+        private readonly TourFilterCollection _filters;
+
+        public TourController(TourFilterCollection filters)
+        {
+            _filters = filters;
+        }
+
         public IEnumerable<BackOfficeTourFile> GetTours()
         {
             var result = new List<BackOfficeTourFile>();
 
-            if (UmbracoConfig.For.UmbracoSettings().BackOffice.Tours.EnableTours == false)
+            if (Current.Configs.Settings().BackOffice.Tours.EnableTours == false)
                 return result;
 
-            var filters = TourFilterResolver.Current.Filters.ToList();
-
             //get all filters that will be applied to all tour aliases
-            var aliasOnlyFilters = filters.Where(x => x.PluginName == null && x.TourFileName == null).ToList();
+            var aliasOnlyFilters = _filters.Where(x => x.PluginName == null && x.TourFileName == null).ToList();
 
             //don't pass in any filters for core tours that have a plugin name assigned
-            var nonPluginFilters = filters.Where(x => x.PluginName == null).ToList();
+            var nonPluginFilters = _filters.Where(x => x.PluginName == null).ToList();
 
             //add core tour files
             var coreToursPath = Path.Combine(IOHelper.MapPath(SystemDirectories.Config), "BackOfficeTours");
@@ -42,7 +50,7 @@ namespace Umbraco.Web.Editors
             foreach (var plugin in Directory.EnumerateDirectories(IOHelper.MapPath(SystemDirectories.AppPlugins)))
             {
                 var pluginName = Path.GetFileName(plugin.TrimEnd('\\'));
-                var pluginFilters = filters.Where(x => x.PluginName != null && x.PluginName.IsMatch(pluginName)).ToList();
+                var pluginFilters = _filters.Where(x => x.PluginName != null && x.PluginName.IsMatch(pluginName)).ToList();
 
                 //If there is any filter applied to match the plugin only (no file or tour alias) then ignore the plugin entirely
                 var isPluginFiltered = pluginFilters.Any(x => x.TourFileName == null && x.TourAlias == null);
@@ -63,21 +71,27 @@ namespace Umbraco.Web.Editors
                 }
             }
             //Get all allowed sections for the current user
-            var allowedSections = UmbracoContext.Current.Security.CurrentUser.AllowedSections.ToList();
+            var allowedSections = Composing.Current.UmbracoContext.Security.CurrentUser.AllowedSections.ToList();
 
             var toursToBeRemoved = new List<BackOfficeTourFile>();
 
             //Checking to see if the user has access to the required tour sections, else we remove the tour
             foreach (var backOfficeTourFile in result)
             {
-                foreach (var tour in backOfficeTourFile.Tours)
+                if (backOfficeTourFile.Tours != null)
                 {
-                    foreach (var toursRequiredSection in tour.RequiredSections)
+                    foreach (var tour in backOfficeTourFile.Tours)
                     {
-                        if (allowedSections.Contains(toursRequiredSection) == false)
+                        if (tour.RequiredSections != null)
                         {
-                            toursToBeRemoved.Add(backOfficeTourFile);
-                            break;
+                            foreach (var toursRequiredSection in tour.RequiredSections)
+                            {
+                                if (allowedSections.Contains(toursRequiredSection) == false)
+                                {
+                                    toursToBeRemoved.Add(backOfficeTourFile);
+                                    break;
+                                }
+                            }
                         }
                     }
                 }
@@ -112,13 +126,18 @@ namespace Umbraco.Web.Editors
                 var contents = File.ReadAllText(tourFile);
                 var tours = JsonConvert.DeserializeObject<BackOfficeTour[]>(contents);
 
+                var backOfficeTours = tours.Where(x =>
+                    aliasFilters.Count == 0 || aliasFilters.All(filter => filter.IsMatch(x.Alias)) == false);
+
+                var localizedTours = backOfficeTours.Where(x =>
+                    string.IsNullOrWhiteSpace(x.Culture) || x.Culture.Equals(Security.CurrentUser.Language,
+                        StringComparison.InvariantCultureIgnoreCase)).ToList();
+
                 var tour = new BackOfficeTourFile
                 {
                     FileName = Path.GetFileNameWithoutExtension(tourFile),
                     PluginName = pluginName,
-                    Tours = tours
-                        .Where(x => aliasFilters.Count == 0 || aliasFilters.All(filter => filter.IsMatch(x.Alias)) == false)
-                        .ToArray()
+                    Tours = localizedTours
                 };
 
                 //don't add if all of the tours are filtered

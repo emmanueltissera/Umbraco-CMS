@@ -1,4 +1,6 @@
+﻿using System.Collections.Generic;
 using System.Web.Http.Filters;
+using Umbraco.Core.Dashboards;
 using Umbraco.Core.Events;
 using Umbraco.Web.Models.ContentEditing;
 
@@ -13,29 +15,36 @@ namespace Umbraco.Web.Editors
         public static event TypedEventHandler<HttpActionExecutedContext, EditorModelEventArgs<MediaItemDisplay>> SendingMediaModel;
         public static event TypedEventHandler<HttpActionExecutedContext, EditorModelEventArgs<MemberDisplay>> SendingMemberModel;
         public static event TypedEventHandler<HttpActionExecutedContext, EditorModelEventArgs<UserDisplay>> SendingUserModel;
+        public static event TypedEventHandler<HttpActionExecutedContext, EditorModelEventArgs<IEnumerable<Tab<IDashboard>>>> SendingDashboardModel;
+
+        private static void OnSendingDashboardModel(HttpActionExecutedContext sender, EditorModelEventArgs<IEnumerable<Tab<IDashboard>>> e)
+        {
+            var handler = SendingDashboardModel;
+            handler?.Invoke(sender, e);
+        }
 
         private static void OnSendingUserModel(HttpActionExecutedContext sender, EditorModelEventArgs<UserDisplay> e)
         {
             var handler = SendingUserModel;
-            if (handler != null) handler(sender, e);
+            handler?.Invoke(sender, e);
         }
 
         private static void OnSendingContentModel(HttpActionExecutedContext sender, EditorModelEventArgs<ContentItemDisplay> e)
         {
             var handler = SendingContentModel;
-            if (handler != null) handler(sender, e);
+            handler?.Invoke(sender, e);
         }
 
         private static void OnSendingMediaModel(HttpActionExecutedContext sender, EditorModelEventArgs<MediaItemDisplay> e)
         {
             var handler = SendingMediaModel;
-            if (handler != null) handler(sender, e);
+            handler?.Invoke(sender, e);
         }
 
         private static void OnSendingMemberModel(HttpActionExecutedContext sender, EditorModelEventArgs<MemberDisplay> e)
         {
             var handler = SendingMemberModel;
-            if (handler != null) handler(sender, e);
+            handler?.Invoke(sender, e);
         }
 
         /// <summary>
@@ -45,30 +54,20 @@ namespace Umbraco.Web.Editors
         /// <param name="e"></param>
         internal static void EmitEvent(HttpActionExecutedContext sender, EditorModelEventArgs e)
         {
-            var contentItemDisplay = e.Model as ContentItemDisplay;
-            if (contentItemDisplay != null)
-            {
+            if (e.Model is ContentItemDisplay)
                 OnSendingContentModel(sender, new EditorModelEventArgs<ContentItemDisplay>(e));
-            }
 
-            var mediaItemDisplay = e.Model as MediaItemDisplay;
-            if (mediaItemDisplay != null)
-            {
+            if (e.Model is MediaItemDisplay)
                 OnSendingMediaModel(sender, new EditorModelEventArgs<MediaItemDisplay>(e));
-            }
 
-            var memberItemDisplay = e.Model as MemberDisplay;
-            if (memberItemDisplay != null)
-            {
+            if (e.Model is MemberDisplay)
                 OnSendingMemberModel(sender, new EditorModelEventArgs<MemberDisplay>(e));
-            }
 
-            var userDisplay = e.Model as UserDisplay;
-            if (userDisplay != null)
-            {
+            if (e.Model is UserDisplay)
                 OnSendingUserModel(sender, new EditorModelEventArgs<UserDisplay>(e));
-            }
+
+            if (e.Model is IEnumerable<IDashboard>)
+                OnSendingDashboardModel(sender, new EditorModelEventArgs<IEnumerable<Tab<IDashboard>>>(e));
         }
-        
     }
 }
